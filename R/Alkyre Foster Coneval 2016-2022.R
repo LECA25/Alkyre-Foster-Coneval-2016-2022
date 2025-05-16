@@ -323,8 +323,61 @@ fwrite(ic_asalud18, "Indicador de Carencia por Acceso a los Servicios de Salud 2
 fwrite(ic_asalud20, "Indicador de Carencia por Acceso a los Servicios de Salud 2020.csv")
 fwrite(ic_asalud22, "Indicador de Carencia por Acceso a los Servicios de Salud 2022.csv")
 
+#################################################################
+## Indicador de Carencia por Calidad y Espacios de la Vivienda ##
+#################################################################
 
-## Indicador de Carencia de 
+# Cargar bases (Vivienda)
+vivienda16 <- fread("viviendas_16.csv") %>% rename_all(tolower)
+vivienda18 <- fread("viviendas_18.csv") %>% rename_all(tolower)
+vivienda20 <- fread("viviendas_20.csv") %>% rename_all(tolower)
+vivienda22 <- fread("viviendas_22.csv") %>% rename_all(tolower)
+# Cargar bases (Concentrado del hogar)
+concentradohogar16 <- fread("concentradohogar_16.csv") %>% rename_all(tolower)
+concentradohogar18 <- fread("concentradohogar_18.csv") %>% rename_all(tolower)
+concentradohogar20 <- fread("concentradohogar_20.csv") %>% rename_all(tolower)
+concentradohogar22 <- fread("concentradohogar_22.csv") %>% rename_all(tolower)
 
+# Unir bases
+ic_cev16 <- full_join(vivienda16,concentradohogar16,by="folioviv")
+ic_cev18 <- full_join(vivienda18,concentradohogar18,by="folioviv")
+ic_cev20 <- full_join(vivienda20,concentradohogar20,by="folioviv")
+ic_cev22 <- full_join(vivienda22,concentradohogar22,by="folioviv")
 
+# Lista de bases 
+bases_ic_cev <- c("ic_cev16","ic_cev18","ic_cev20","ic_cev22")
+# Bucle
+for (base_ic_cev in bases_ic_cev) {
+  df <- get(base_ic_cev)
+  # Identificador del Hogar
+  df <- df %>% mutate(idhogar = paste0(folioviv,foliohog))
+  # Pisos
+  df <- df %>% mutate(mat_pisos = as.numeric(mat_pisos)) 
+  df <- df %>% mutate(icv_pisos = case_when(mat_pisos == 1 ~ 1,
+                                            between(mat_pisos, 2, 3) ~ 0,
+                                            TRUE ~ NA_real_))
+  # Techos
+  df <- df %>% mutate(icv_techos = case_when(between(mat_techos, 1, 2) ~ 1,
+                                             TRUE ~ 0))
+  # Muros
+  df <- df %>% mutate(icv_muros = case_when(mat_pared < 6 ~ 1,
+                                            mat_pared >= 6 ~ 0,
+                                            TRUE ~ NA_real_))
+  # Indice de hacinamiento
+  df <- as.data.table(df)[, indicehacinamiento := tot_resid/num_cuarto]
+  df <- df %>% mutate(icv_hac = case_when(indicehacinamiento <= 2.5 ~ 0,
+                                          indicehacinamiento > 2.5 ~ 1,
+                                          TRUE ~ NA_real_))
+  # Indicador de Carencia por Calidad y Espacios de la Vivienda
+  df <- df %>% mutate(iccv = case_when(is.na(icv_pisos) | is.na(icv_techos) | is.na(icv_muros) | is.na(icv_hac) ~ NA_real_,
+                                       icv_pisos == 1 | icv_techos == 1 | icv_muros == 1 | icv_hac == 1 ~ 1,
+                                       icv_pisos == 0 & icv_techos == 0 & icv_muros == 0 & icv_hac == 0 ~ 0,
+                                       TRUE ~ NA_real_))
+
+  assign(base_ic_cev, df)
+}
+
+table(ic_cev16$iccv)
+
+typeof(ic_cev16$icv_pisos)
 
