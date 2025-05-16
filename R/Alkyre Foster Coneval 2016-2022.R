@@ -122,9 +122,6 @@ for (base_ocupados in bases_ocupados) {
   assign(base_ocupados, df)
 }
 
-
-
-
 # Crear las bases de datos para salud
 poblacion16_salud <- fread("poblacion_16.csv") %>% rename_all(tolower)
 poblacion18_salud <- fread("poblacion_18.csv") %>% rename_all(tolower)
@@ -161,7 +158,7 @@ for (base_ic_asalud in bases_ic_asalud) {
                                       (act_pnea1 == 1 | act_pnea2 == 1) & (edad >= 16 & !is.na(edad)) ~ 2,
                                       (edad >= 16 & !is.na(edad)) & ((act_pnea1 != 1 | is.na(act_pnea1)) & (act_pnea2 != 1 | is.na(act_pnea2))) & ((act_pnea1 >= 2 & act_pnea1 <= 6) | (act_pnea2 >= 2 & act_pnea2 <= 6)) ~ 0))
   
-  
+  # Hasta aquí me quedé 
   
   
   
