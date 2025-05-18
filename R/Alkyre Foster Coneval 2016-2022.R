@@ -451,3 +451,131 @@ fwrite(ic_sbv20, "Indicador de Carencia por Acceso a Servicios Básicos en la Vi
 fwrite(ic_sbv22, "Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda 2022.csv")
 
 
+###############################################################################
+## Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad ##
+###############################################################################
+
+# Bases menores de edad
+menores16 <- fread("poblacion_16.csv") %>% rename_all(tolower)
+menores18 <- fread("poblacion_18.csv") %>% rename_all(tolower)
+menores20 <- fread("poblacion_20.csv") %>% rename_all(tolower)
+menores22 <- fread("poblacion_22.csv") %>% rename_all(tolower)
+
+# Lista de Bases de Menores de Edad
+bases_menores <- c("menores16","menores18","menores20","menores22")
+# Bucle
+for (base_menores in bases_menores) {
+  df <- get(base_menores)
+  # Filtar por parentesco
+  df <- df %>% filter(!(between(parentesco,400,499) | between(parentesco,700,799)))
+  # Identificador del Hogar
+  df <- df %>% mutate(idhogar = paste0(folioviv,foliohog))
+  # Menores
+  df <- df %>% mutate(menores = ifelse(between(edad, 0, 17), 1, NA_real_))
+  # Cantidad de menores por familia
+  df <- df %>% 
+    group_by(idhogar) %>%
+    summarise(suma_menores = sum(menores,na.rm = TRUE))
+  # Identificador de menores
+  df <- df %>% mutate(idmenores = case_when(suma_menores >= 1 & !is.na(suma_menores) ~ 1,
+                                            suma_menores == 0 ~ 0,
+                                            TRUE ~ NA_real_))
+  assign(base_menores, df)
+}
+
+# Bases Hogares
+hogares_menores16 <- fread("hogares_16.csv") %>% rename_all(tolower)
+hogares_menores18 <- fread("hogares_18.csv") %>% rename_all(tolower)
+hogares_menores20 <- fread("hogares_20.csv") %>% rename_all(tolower)
+hogares_menores22 <- fread("hogares_22.csv") %>% rename_all(tolower)
+
+# Lista hogares de los menores
+bases_hogares_menores <- c("hogares_menores16","hogares_menores18","hogares_menores20","hogares_menores22")
+# Crear el Identificador del Hogar
+for (base_hogares_menores in bases_hogares_menores) {
+  df <- get(base_hogares_menores)
+  # Identificador del Hogar
+  df <- df %>% mutate(idhogar = paste0(folioviv,foliohog))
+  assign(base_hogares_menores, df)
+}
+
+# Unir las bases de menores con las de hogares
+ic_ali16 <- full_join(menores16,hogares_menores16,by="idhogar")
+ic_ali18 <- full_join(menores18,hogares_menores18,by="idhogar")
+ic_ali20 <- full_join(menores20,hogares_menores20,by="idhogar")
+ic_ali22 <- full_join(menores22,hogares_menores22,by="idhogar")
+
+# Lista bases ic_ali
+bases_ic_ali <- c("ic_ali16","ic_ali18","ic_ali20","ic_ali22")
+# Bucle
+for (base_ic_ali in bases_ic_ali) {
+  df <- get(base_ic_ali)
+  # Hogares sin menores
+  df <- df %>% mutate(i_alim1ad = ifelse(acc_alim4 == 1, 1, 0))
+  df <- df %>% mutate(i_alim2ad = ifelse(acc_alim5 == 1, 1, 0))
+  df <- df %>% mutate(i_alim3ad = ifelse(acc_alim6 == 1, 1, 0))
+  df <- df %>% mutate(i_alim4ad = ifelse(acc_alim2 == 1, 1, 0))
+  df <- df %>% mutate(i_alim5ad = ifelse(acc_alim7 == 1, 1, 0))
+  df <- df %>% mutate(i_alim6ad = ifelse(acc_alim8 == 1, 1, 0))
+  # Hogares con menores
+  df <- df %>% mutate(i_alim7men = ifelse(acc_alim11 == 1, 1, 0))
+  df <- df %>% mutate(i_alim8men = ifelse(acc_alim12 == 1, 1, 0))
+  df <- df %>% mutate(i_alim9men = ifelse(acc_alim13 == 1, 1, 0))
+  df <- df %>% mutate(i_alim10men = ifelse(acc_alim14 == 1, 1, 0))
+  df <- df %>% mutate(i_alim11men = ifelse(acc_alim15 == 1, 1, 0))
+  df <- df %>% mutate(i_alim12men = ifelse(acc_alim16 == 1, 1, 0))
+  # Escala de Hogares sin menores
+  df <- df %>% mutate(tot_ia1 = ifelse(idmenores == 0, rowSums(select(., i_alim1ad,i_alim2ad,i_alim3ad,i_alim4ad,i_alim5ad,i_alim6ad), na.rm = TRUE), NA_real_))
+  # Escala de hogares con menores
+  df <- df %>% mutate(tot_ia2 = ifelse(idmenores == 1, rowSums(select(., i_alim1ad,i_alim2ad,i_alim3ad,i_alim4ad,i_alim5ad,i_alim6ad,i_alim7men,i_alim8men,i_alim9men,i_alim10men,i_alim11men,i_alim12men), na.rm = TRUE), NA_real_))
+  # Inseguridad Alimentaria
+  df <- df %>% mutate(i_alimentaria = case_when(tot_ia1 == 0 | tot_ia2 == 0 ~ 0,
+                                                between(tot_ia1,1,2) | between(tot_ia2,1,3) ~ 1,
+                                                between(tot_ia1,3,4) | between(tot_ia2,4,7) ~ 2,
+                                                between(tot_ia1,5,6) | between(tot_ia2,8,12) & !is.na(tot_ia2) ~ 3,
+                                                TRUE ~ NA_real_))
+  # Indice de Carencia Alimentaria
+  df <- df %>% mutate(ic_alimentaria = case_when(between(i_alimentaria,2,3) ~ 1,
+                                                 between(i_alimentaria,0,1) ~ 0,
+                                                 TRUE ~ NA_real_))
+  # Consumo de alimentos ponderados
+  df <- df %>% mutate(cpond1 = pmax(alim17_1,alim17_2))
+  df <- df %>% mutate(cpond1 = cpond1 * 2)
+  df <- df %>% mutate(cpond3 = alim17_3 * 1)
+  df <- df %>% mutate(cpond4 = alim17_4 * 1)
+  df <- df %>% mutate(cpond5 = pmax(alim17_5,alim17_6,alim17_7))
+  df <- df %>% mutate(cpond5 = cpond5 * 4)
+  df <- df %>% mutate(cpond8 = alim17_8 * 3)
+  df <- df %>% mutate(cpond9 = alim17_9 * 4)
+  df <- df %>% mutate(cpond10 = alim17_10 * 0.5)
+  df <- df %>% mutate(cpond11 = alim17_11 * 0.5)
+  df <- df %>% mutate(cpond12 = alim17_12 * 0)
+  # Suma ponderada
+  df <- df %>% mutate(tot_cpond = rowSums(select(., cpond1,cpond3,cpond4,cpond5,
+                                                 cpond8,cpond9,cpond10,cpond11,cpond12), na.rm=TRUE))
+  # Dieta Consumida por Hogares
+  df <- df %>% mutate(dch = case_when(between(tot_cpond,0,28) ~ 1,
+                                      between(tot_cpond,29,42) ~ 2,
+                                      tot_cpond > 42 & !is.na(tot_cpond) ~ 3,
+                                      TRUE ~ NA))
+  # Limitacion en el consumo de alimentos
+  df <- df %>% mutate(lca = ifelse(dch <= 2, 1, 0))
+  # Indicador de Carencia por Acceso a la Alimentación Nutritica y de Calidad
+  df <- df %>% mutate(ic_ali_nc = case_when(lca == 1 | ic_alimentaria == 1 & !is.na(lca) & !is.na(ic_alimentaria) ~ 1,
+                                            lca == 0 & ic_alimentaria == 0 ~ 0,
+                                            TRUE ~ NA_real_))
+  # Mantener variables importantes
+  df <- df %>% select(idhogar,suma_menores,idmenores,starts_with("i_alim"),starts_with("tot_ia"),
+                      i_alimentaria,ic_alimentaria,starts_with("cpond"),tot_cpond,dch,lca,ic_ali_nc)
+  assign(base_ic_ali, df)
+}
+
+# Exportar Bases
+fwrite(ic_ali16,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2016.csv")
+fwrite(ic_ali18,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2018.csv")
+fwrite(ic_ali20,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2020.csv")
+fwrite(ic_ali22,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2022.csv")
+
+
+
+
