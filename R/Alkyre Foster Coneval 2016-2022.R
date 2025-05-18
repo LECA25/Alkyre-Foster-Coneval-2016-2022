@@ -386,6 +386,68 @@ fwrite(ic_cev18,"Indicador de Carencia por Calidad y Espacios de la Vivienda 201
 fwrite(ic_cev20,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2020.csv")
 fwrite(ic_cev22,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2022.csv")
 
+#############################################################################
+## Indicador de Carencia por Acceso a los Servicios Básicos en la Vivienda ##
+#############################################################################
 
+# Unir bases de vivienda y concentrado del hogar
+ic_sbv16 <- full_join(vivienda16,concentradohogar16,by="folioviv")
+ic_sbv18 <- full_join(vivienda18,concentradohogar18,by="folioviv")
+ic_sbv20 <- full_join(vivienda20,concentradohogar20,by="folioviv")
+ic_sbv22 <- full_join(vivienda22,concentradohogar22,by="folioviv")
+
+# Listas de bases
+bases_ic_sbv <- c("ic_sbv16","ic_sbv18","ic_sbv20","ic_sbv22")
+bases_ic_sbv_procaptar <- c("ic_sbv18","ic_sbv20","ic_sbv22")
+
+# Bucle general
+for (base_ic_sbv in bases_ic_sbv) {
+  df <- get(base_ic_sbv)
+  # Identificador
+  df <- df %>% mutate(idhogar = paste0(folioviv,foliohog))
+  # Indicador de carencia de disposicón de agua
+  df <- df %>% mutate(ic_agua = case_when(disp_agua >= 3 ~ 1,
+                                          disp_agua <= 2 ~ 0,
+                                          TRUE ~ NA_real_))
+  # Indicador de carencia por servicio de drenaje
+  df <- df %>% mutate(ic_drenaje = case_when(drenaje <= 2 ~ 0,
+                                             drenaje >= 3 ~ 1,
+                                             TRUE ~ NA_real_))
+  # Indicador de Carencia por servicios de electricidad
+  df <- df %>% mutate(ic_electricidad = case_when(disp_elect <= 4 ~ 0,
+                                                  disp_elect == 5 ~ 1,
+                                                  TRUE ~ NA_real_))
+  # Indicador de Carencia por combustible para Cocinar
+  df <- df %>% mutate(ic_combustible = case_when(between(combustible,3,6) ~ 0,
+                                              between(combustible,1,2) & estufa_chi == 1 ~ 0,
+                                              between(combustible,1,2) & estufa_chi == 2 ~ 1,
+                                              TRUE ~ NA_real_))
+  # Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda
+  df <- df %>% mutate(ic_sbv = case_when(ic_agua == 1 | ic_drenaje == 1 | ic_electricidad == 1 | ic_combustible == 1 ~ 1,
+                                         ic_agua == 0 & ic_drenaje == 0 & ic_electricidad == 0 & ic_combustible == 0 ~ 0,
+                                         is.na(ic_agua) | is.na(ic_drenaje) | is.na(ic_electricidad) | is.na(ic_combustible) ~ NA_real_,
+                                         TRUE ~ NA_real_))
+  assign(base_ic_sbv, df)
+}
+
+# Bucle Programa Procaptar
+for (base_ic_sbv_procaptar in bases_ic_sbv_procaptar) {
+  df = get(base_ic_sbv_procaptar)
+  df <- df %>% mutate(ic_agua = ifelse(procaptar == 1 & disp_agua == 4, 0, ic_agua))
+  assign(base_ic_sbv_procaptar, df)
+}
+
+# Mantener variables
+for (base_ic_sbv in bases_ic_sbv) {
+  df = get(base_ic_sbv)
+  df <- df %>% select(idhogar, ic_agua, ic_drenaje, ic_electricidad, ic_combustible, ic_sbv)
+  assign(base_ic_sbv,df)
+}
+
+# Exportar bases
+fwrite(ic_sbv16, "Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda 2016.csv")
+fwrite(ic_sbv18, "Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda 2018.csv")
+fwrite(ic_sbv20, "Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda 2020.csv")
+fwrite(ic_sbv22, "Indicador de Carencia por Acceso a Servicios Básicos en la Vivienda 2022.csv")
 
 
