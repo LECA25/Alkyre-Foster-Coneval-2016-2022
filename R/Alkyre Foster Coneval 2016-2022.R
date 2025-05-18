@@ -373,11 +373,19 @@ for (base_ic_cev in bases_ic_cev) {
                                        icv_pisos == 1 | icv_techos == 1 | icv_muros == 1 | icv_hac == 1 ~ 1,
                                        icv_pisos == 0 & icv_techos == 0 & icv_muros == 0 & icv_hac == 0 ~ 0,
                                        TRUE ~ NA_real_))
+  # Mantener variables
+  df <- df %>% select(idhogar,icv_pisos,icv_techos,icv_muros,indicehacinamiento,icv_hac,
+                      iccv)
 
   assign(base_ic_cev, df)
 }
 
-table(ic_cev16$iccv)
+# Exportar bases
+fwrite(ic_cev16,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2016.csv")
+fwrite(ic_cev18,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2018.csv")
+fwrite(ic_cev20,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2020.csv")
+fwrite(ic_cev22,"Indicador de Carencia por Calidad y Espacios de la Vivienda 2022.csv")
 
-typeof(ic_cev16$icv_pisos)
+
+
 
