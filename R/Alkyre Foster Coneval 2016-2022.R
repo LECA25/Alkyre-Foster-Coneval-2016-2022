@@ -730,6 +730,184 @@ for (base_pensiones in bases_pensiones) {
 }
 
 
+# Bases Seguridad social
+poblacion_seguridadsocial16 <- fread("poblacion_16.csv") %>% rename_all(tolower)
+poblacion_seguridadsocial18 <- fread("poblacion_18.csv") %>% rename_all(tolower)
+poblacion_seguridadsocial20 <- fread("poblacion_20.csv") %>% rename_all(tolower)
+poblacion_seguridadsocial22 <- fread("poblacion_22.csv") %>% rename_all(tolower)
+
+# Lista seguridad social 
+bases_seguridadsocial <- c("poblacion_seguridadsocial16","poblacion_seguridadsocial18","poblacion_seguridadsocial20","poblacion_seguridadsocial22")
+# Bucle
+for (base_seguridadsocial in bases_seguridadsocial) {
+  df <- get(base_seguridadsocial)
+  # Mantener parentesco
+  df <- df %>% filter(!(between(parentesco,400,499) | between(parentesco,700,799)))
+  # Identificador de la persona
+  df <- df %>% mutate(idpersona = paste0(folioviv,foliohog,numren))
+  assign(base_seguridadsocial, df)
+}
+
+# Lineas de pobreza extrema (rural y urbana)
+linea_pobreza_extrema <- data.frame(
+  "año" = c(2016,2018,2020,2022),
+  "lpobrezaeurbana" = c(1348.81,1521.44,1688.57,2042.89),
+  "lpobrezaerural" = c(1015.44,1145.5,1287.59,1566.95)
+)
+
+# Unir las bases de prestaciones y pensiones
+# 2016
+ic_segsoc16 <- full_join(prestaciones16,pensiones16,by="idpersona")
+ic_segsoc16 <- full_join(ic_segsoc16,poblacion_seguridadsocial16,by="idpersona")
+# 2018
+ic_segsoc18 <- full_join(prestaciones18,pensiones18,by="idpersona")
+ic_segsoc18 <- full_join(ic_segsoc18,poblacion_seguridadsocial18,by="idpersona")
+# 2020
+ic_segsoc20 <- full_join(prestaciones20,pensiones20,by="idpersona")
+ic_segsoc20 <- full_join(ic_segsoc20,poblacion_seguridadsocial20,by="idpersona")
+# 2022
+ic_segsoc22 <- full_join(prestaciones22,pensiones22,by="idpersona")
+ic_segsoc22 <- full_join(ic_segsoc22,poblacion_seguridadsocial22,by="idpersona")
+
+# Año
+ic_segsoc16$año <- 2016
+ic_segsoc18$año <- 2018
+ic_segsoc20$año <- 2020
+ic_segsoc22$año <- 2022
+
+# Unir ic_segsoc con la base de lineas de pobreza
+ic_segsoc16 <- left_join(ic_segsoc16,linea_pobreza_extrema,by="año")
+ic_segsoc18 <- left_join(ic_segsoc18,linea_pobreza_extrema,by="año")
+ic_segsoc20 <- left_join(ic_segsoc20,linea_pobreza_extrema,by="año")
+ic_segsoc22 <- left_join(ic_segsoc22,linea_pobreza_extrema,by="año")
+
+# Lista ic_segsoc
+bases_ic_segsoc <- c("ic_segsoc16","ic_segsoc18","ic_segsoc20","ic_segsoc22")
+# Bucle
+for (base_ic_segsoc in bases_ic_segsoc) {
+  df <- get(base_ic_segsoc)
+  # Otros Nucleos Familiares<
+  if (base_ic_segsoc %in% c("ic_segsoc16","ic_segsoc18")) {
+    df <- df %>% mutate(s_salud = case_when(atemed == 1 & (inst_1 == 1 | inst_2 == 2 | inst_3 == 3 | inst_4 == 4) & (inscr_3 == 3 | inscr_4 == 4 | inscr_6 == 6 | inscr_7 == 7) ~ 1,
+                                            !is.na(segpop) & !is.na(atemed) ~ 0,
+                                            TRUE ~ NA_real_))
+  } else {
+    df <- df %>% mutate(s_salud = case_when(atemed == 1 & (inst_1 == 1 | inst_2 == 2 | inst_3 == 3 | inst_4 == 4) & (inscr_3 == 3 | inscr_4 == 4 | inscr_6 == 6 | inscr_7 == 7) ~ 1,
+                                            !is.na(pop_insabi) & !is.na(atemed) ~ 0,
+                                            TRUE ~ NA_real_))
+  }
+  # linea de pobreza por programa de adultos mayores
+  df <- df %>% mutate(lpobreza_pam = (lpobrezaeurbana + lpobrezaerural)/2)
+  # Programa de Adultos Mayores
+  df <- df %>% mutate(pam = case_when(edad >= 65 & !is.na(edad) ~ 0,
+                                      (edad >= 65 & !is.na(edad)) & suma_ingreso_pam >= lpobreza_pam & !is.na(suma_ingreso_pam) ~ 1,
+                                      TRUE ~ NA))
+  # Identificador del hogar
+  df <- df %>% mutate(idhogar = paste0(folioviv.x,foliohog.x,numren.x))
+  # Población Económicamente actuva
+  df <- df %>% mutate(pea = case_when(trabajo == 1 & (edad >= 16 & !is.na(edad)) ~ 1,
+                                      (act_pnea1 == 1 | act_pnea2 == 1) & (edad >= 16 & !is.na(edad)) ~ 2,
+                                      (edad >= 16 & !is.na(edad)) & ((act_pnea1 != 1 | is.na(act_pnea1)) & (act_pnea2 != 1 | is.na(act_pnea2))) & ((act_pnea1 >= 2 & act_pnea1 <= 6) | (act_pnea2 >= 2 & act_pnea2 <= 6)) ~ 0))
+  # Tipo de Trabajo 1
+  df <- df %>% mutate(tipo_trabajo_1 = case_when(pea == 1 ~ tipo_trabajo_1,
+                                                 pea %in% c(0,2) ~ NA,
+                                                 is.na(pea) ~ NA,
+                                                 TRUE ~ tipo_trabajo_1))
+  # Tipo de Trabajo 2
+  df <- df %>% mutate(tipo_trabajo_2 = case_when(pea == 1 ~ tipo_trabajo_2,
+                                                 pea %in% c(0,2) ~ NA,
+                                                 is.na(pea) ~ NA,
+                                                 TRUE ~ tipo_trabajo_2))
+  # Jubilados
+  df <- df %>% mutate(jubilados = case_when(trabajo_mp == 2 & (act_pnea1 == 2 | act_pnea2 == 2) ~ 1,
+                                            suma_ingreso_pensiones > 0 & !is.na(suma_ingreso_pensiones) ~ 1,
+                                            inscr_2 == 2 ~ 1,
+                                            TRUE ~ 0))
+  # Servicios Médicos por Prestación Laboral
+  # Como ocupación principal
+  df <- df %>% mutate(smedlprinc = case_when(ocupa_1 == 1 & atemed == 1 & (inst_1 == 1 | inst_2 == 2 | inst_3 == 3 | inst_4 == 4) & inscr_1 == 1 ~ 1,
+                                             ocupa_1 == 1 ~ 0,
+                                             TRUE ~ NA))
+  # Como ocupación secundaria
+  df <- df %>% mutate(smedlsec = case_when(ocupa_2 == 1 & atemed == 1 & (inst_1 == 1 | inst_2 == 2 |inst_3 == 3 | inst_4 == 4) & inscr_1 == 1 ~ 1,
+                                           ocupa_2 == 1 ~ 0,
+                                           TRUE ~ NA))
+  # Servicios médicos de contratacion voluntaria
+  df <- df %>% mutate(smedcontvol = case_when(atemed == 1 & (inst_1 == 1 | inst_2 == 2 | inst_3 == 3 |inst_4 == 4) & inscr_6 == 6 & (edad >= 12 & !is.na(edad)) ~ 1,
+                                              edad >= 12 & !is.na(edad) ~ 0,
+                                              TRUE ~ NA))
+  # Ahorro para el retiro o pension para la vejez (SAR o Afore)
+  df <- df %>% mutate(aforecv = case_when(is.na(segvol_1) & (edad >= 12 & !is.na(edad)) ~ 0,
+                                          segvol_1 == 1 & (edad >= 12 & !is.na(edad)) ~ 1,
+                                          TRUE ~ NA_real_))
+  # Acceso directo a la seguridad social
+  df <- df %>% mutate(ss_directo = case_when(tipo_trabajo_1 == 1 & smedlprinc == 1 ~ 1,
+                                             tipo_trabajo_1 == 2 & ((smedlprinc == 1 | smedcontvol == 1) & (aforelaboral_1 == 1 | aforecv == 1)) ~ 1,
+                                             tipo_trabajo_1 == 3 & ((smedlprinc == 1 | smedcontvol == 1) & aforecv == 1) ~ 1,
+                                             tipo_trabajo_2 == 1 & smedlsec == 1 ~ 1,
+                                             tipo_trabajo_2 == 2 & ((smedlsec == 1 | smedcontvol == 1) & (aforelaboral_2 == 1 | aforecv == 1)) ~ 1,
+                                             tipo_trabajo_2 == 3 & ((smedlsec == 1 | smedcontvol == 1) & aforecv == 1) ~ 1,
+                                             jubilados == 1 ~ 1,
+                                             TRUE ~ 0))
+  # Pariente
+  df <- df %>% mutate(pariente = case_when(between(parentesco,100,199) ~ 1,
+                                           between(parentesco,200,299) ~ 2,
+                                           between(parentesco,300,399) ~ 3,
+                                           parentesco == 601 ~ 4,
+                                           parentesco == 615 ~ 5,
+                                           TRUE ~ 0))
+  # Inasistencia a la escuela
+  df <- df %>% mutate(inasis_escuela = case_when(asis_esc == 1 ~ 0,
+                                                 asis_esc == 2 ~ 1,
+                                                 TRUE ~ NA))
+  # ¿El miembro cuenta con acceso directo a la salud por medio de la relacion del parentesco?
+  df <- df %>% mutate(jefe = case_when(pariente == 1 & ss_directo == 1 & (((inst_2 == 2 | inst_3 == 3) & inscr_6 == 6) & (is.na(inst_1) & is.na(inst_4) & is.na(inst_6)) & (is.na(inscr_1) & is.na(inscr_2) & is.na(inscr_3) & is.na(inscr_4) & is.na(inscr_5) & is.na(inscr_7))) ~ NA,
+                                       pariente == 1 & ss_directo == 1 ~ 1,
+                                       TRUE ~ NA))
+  
+  df <- as.data.table(df)[, jefe_ss := sum(jefe, na.rm = TRUE), by = idhogar] %>%
+    mutate(jefe_ss = ifelse(jefe_ss > 0, 1, jefe_ss))
+  # Conyuge
+  df <- df %>% mutate(conyuge = case_when(pariente == 2 & ss_directo == 1 & (((inst_2 == 2 | inst_3 == 3) & inscr_6 == 6) & (is.na(inst_1) & is.na(inst_4) & is.na(inst_6)) & (is.na(inscr_1) & is.na(inscr_2) & is.na(inscr_3) & is.na(inscr_4) & is.na(inscr_5) & is.na(inscr_7))) ~ NA,
+                                          pariente == 2 & ss_directo == 1 ~ 1,
+                                          TRUE ~ NA))
+  df <- as.data.table(df)[, conyuge_ss := sum(conyuge, na.rm=TRUE), by = idhogar] %>% 
+    mutate(conyuge_ss = ifelse(conyuge_ss > 0, 1, conyuge_ss))
+  # Hijo
+  df <- df %>% mutate(hijo = case_when(pariente == 3 & ss_directo == 1 & (((inst_2 == 2 | inst_3 == 3) & inscr_6 == 6) & (is.na(inst_1) & is.na(inst_4) & is.na(inst_6)) & (is.na(inscr_1) & is.na(inscr_2) & is.na(inscr_3) & is.na(inscr_4) & is.na(inscr_5) & is.na(inscr_7))) ~ NA,
+                                       pariente == 3 & ss_directo == 1 ~ 1,
+                                       TRUE ~ NA))
+  df <- as.data.table(df)[, hijo_ss := sum(hijo, na.rm = TRUE), by = idhogar] %>%
+    mutate(hijo_ss = ifelse(hijo_ss > 0, 1, hijo_ss))
+  # Indicador de Carencia por Acceso a la Seguridad Social
+  df <- df %>% mutate(ic_seguridadsocial = case_when(ss_directo == 1 ~ 0,
+                                                     pariente == 1 & conyuge_ss == 1 ~ 0,
+                                                     pariente == 1 & pea == 0 & hijo_ss == 1 ~ 0,
+                                                     pariente == 2 & jefe_ss == 1 ~ 1,
+                                                     pariente == 2 & pea == 0 & hijo_ss == 1 ~ 0,
+                                                     pariente == 3 & edad < 16 & jefe_ss == 1 ~ 0,
+                                                     pariente == 3 & edad < 16 & conyuge_ss == 1 ~ 0,
+                                                     pariente == 3 & between(edad, 16,25) & inasis_escuela == 0 & jefe_ss == 1 ~ 0,
+                                                     pariente == 3 & between(edad, 16,25) & inasis_escuela == 0 & conyuge_ss == 1 ~ 0,
+                                                     pariente == 4 & pea == 0 & jefe_ss == 1 ~ 0,
+                                                     pariente == 5 & pea == 0 & conyuge_ss == 1 ~ 0,
+                                                     s_salud == 1 ~ 0,
+                                                     pam == 1 ~ 0,
+                                                     TRUE ~ 1))
+  # Mantener variables
+  df <- df %>% select(tipo_trabajo_1,tipo_trabajo_2,aforelaboral_1,aforelaboral_2,ocupa_1,ocupa_2,trabajo,idpersona,sexo,
+                      edad,parentesco,act_pnea1,act_pnea2,idhogar,año,s_salud,pam,pea,jubilados,smedlprinc,smedlsec,smedcontvol,
+                      aforecv,ss_directo,pariente,inasis_escuela,jefe,jefe_ss,conyuge,conyuge_ss,hijo,hijo_ss,ic_seguridadsocial)
+  assign(base_ic_segsoc, df)
+}
+
+# Exportar bases
+fwrite(ic_segsoc16, "Indicador de Carencia por Acceso a la Seguridad Social 2016.csv")
+fwrite(ic_segsoc18, "Indicador de Carencia por Acceso a la Seguridad Social 2018.csv")
+fwrite(ic_segsoc20, "Indicador de Carencia por Acceso a la Seguridad Social 2020.csv")
+fwrite(ic_segsoc22, "Indicador de Carencia por Acceso a la Seguridad Social 2022.csv")
+
+
 
 
 
