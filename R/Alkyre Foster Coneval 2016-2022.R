@@ -555,7 +555,7 @@ for (base_ic_ali in bases_ic_ali) {
                                                  cpond8,cpond9,cpond10,cpond11,cpond12), na.rm=TRUE))
   # Dieta Consumida por Hogares
   df <- df %>% mutate(dch = case_when(between(tot_cpond,0,28) ~ 1,
-                                      between(tot_cpond,29,42) ~ 2,
+                                      tot_cpond > 28 & tot_cpond <= 42 ~ 2,
                                       tot_cpond > 42 & !is.na(tot_cpond) ~ 3,
                                       TRUE ~ NA))
   # Limitacion en el consumo de alimentos
@@ -570,11 +570,169 @@ for (base_ic_ali in bases_ic_ali) {
   assign(base_ic_ali, df)
 }
 
+table(ic_ali16$ic_ali_nc)
+
+
+
 # Exportar Bases
 fwrite(ic_ali16,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2016.csv")
 fwrite(ic_ali18,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2018.csv")
 fwrite(ic_ali20,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2020.csv")
 fwrite(ic_ali22,"Indicador de Carencia por Acceso a la Alimentación Nutritiva y de Calidad 2022.csv")
+
+
+############################################################
+## Indicador de Carencia por Acceso a la Seguridad Social ##
+############################################################
+
+# Cargar bases de trabajo
+prestaciones16 <- fread("trabajos_16.csv") %>% rename_all(tolower)
+prestaciones18 <- fread("trabajos_18.csv") %>% rename_all(tolower)
+prestaciones20 <- fread("trabajos_20.csv") %>% rename_all(tolower)
+prestaciones22 <- fread("trabajos_22.csv") %>% rename_all(tolower)
+
+# Lista prestaciones
+bases_prestaciones <- c("prestaciones16","prestaciones18","prestaciones20","prestaciones22")
+# Bucle
+for (base_prestaciones in bases_prestaciones) {
+  df <- get(base_prestaciones)
+  # Tipo de trabajo
+  df <- df %>% mutate(tipo_trabajo = case_when(subor == 1 ~ 1,
+                                               subor == 2 & indep == 1 & tiene_suel == 1 ~ 2,
+                                               subor == 2 & indep == 2 & pago == 1 ~ 2,
+                                               subor == 2 & indep == 1 & tiene_suel == 2 ~ 3,
+                                               subor == 2 & indep == 2 & between(pago,2,3) ~ 3,
+                                               TRUE ~ NA_real_))
+  # Identificador del trabajo
+  df <- df %>% mutate(ocupa = case_when(id_trabajo == 2 ~ 0,
+                                        id_trabajo == 1 ~ 1,
+                                        TRUE ~ NA_real_))
+  if (base_prestaciones == "prestaciones16") {
+    df <- df %>% mutate(aforelaboral = case_when(is.na(pres_14) ~ 0,
+                                                 pres_14 == 14 ~ 1,
+                                                 TRUE ~ NA_real_))
+  } else {
+    df <- df %>% mutate(aforelaboral = case_when(is.na(pres_8) ~ 0,
+                                                 pres_8 == 8 ~ 1,
+                                                 TRUE ~ NA_real_))
+  }
+  # Mantener Variables
+  df <- df %>% select(folioviv,foliohog,numren,id_trabajo,tipo_trabajo,aforelaboral,ocupa)
+  # Reformatear la tabla
+  df <- df %>% 
+    pivot_wider(id_cols = c(folioviv,foliohog,numren),names_from = id_trabajo,values_from = c(tipo_trabajo,aforelaboral,ocupa))
+  # Ocupa 2 
+  df <- df %>% mutate(ocupa_2 = ifelse(ocupa_2 == 0, 1, 0))
+  # Población Trabajadora
+  df <- df %>% mutate(trabajo = 1)
+  # Identificador de la persona
+  df <- df %>% mutate(idpersona = paste0(folioviv,foliohog,numren))
+  assign(base_prestaciones, df)
+}
+
+# Creación de las bases de pensiones
+pensiones16 <- fread("ingresos_16.csv") %>% rename_all(tolower)
+pensiones18 <- fread("ingresos_18.csv") %>% rename_all(tolower)
+pensiones20 <- fread("ingresos_20.csv") %>% rename_all(tolower)
+pensiones22 <- fread("ingresos_22.csv") %>% rename_all(tolower)
+
+# Años
+pensiones16[, año := 2016]
+pensiones18[, año := 2018]
+pensiones20[, año := 2020]
+pensiones22[, año := 2022]
+
+# Deflactor
+deflactor_pensiones <- fread("deflactores_pensiones.csv") %>% rename_all(tolower)
+# Mes 1 
+deflactor_pensiones_mes1 <- deflactor_pensiones %>% rename(mes_1 = mes,
+                                                           deflactor_mes1 = deflactor)
+# Mes_2
+deflactor_pensiones_mes2 <- deflactor_pensiones %>% rename(mes_2 = mes,
+                                                           deflactor_mes2 = deflactor)
+# Mes 3
+deflactor_pensiones_mes3 <- deflactor_pensiones %>% rename(mes_3 = mes,
+                                                           deflactor_mes3 = deflactor)
+# Mes 4
+deflactor_pensiones_mes4 <- deflactor_pensiones %>% rename(mes_4 = mes,
+                                                           deflactor_mes4 = deflactor)
+# Mes 5
+deflactor_pensiones_mes5 <- deflactor_pensiones %>% rename(mes_5 = mes,
+                                                           deflactor_mes5 = deflactor)
+# Mes 6
+deflactor_pensiones_mes6 <- deflactor_pensiones %>% rename(mes_6 = mes,
+                                                           deflactor_mes6 = deflactor)
+
+# Unir deflactor con las bases de pensiones
+# 2016
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes1,by = c("mes_1","año"))
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes2,by = c("mes_2","año"))
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes3,by = c("mes_3","año"))
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes4,by = c("mes_4","año"))
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes5,by = c("mes_5","año"))
+pensiones16 <- left_join(pensiones16,deflactor_pensiones_mes6,by = c("mes_6","año"))
+# 2018
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes1,by = c("mes_1","año"))
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes2,by = c("mes_2","año"))
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes3,by = c("mes_3","año"))
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes4,by = c("mes_4","año"))
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes5,by = c("mes_5","año"))
+pensiones18 <- left_join(pensiones18,deflactor_pensiones_mes6,by = c("mes_6","año"))
+# 2020
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes1,by = c("mes_1","año"))
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes2,by = c("mes_2","año"))
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes3,by = c("mes_3","año"))
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes4,by = c("mes_4","año"))
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes5,by = c("mes_5","año"))
+pensiones20 <- left_join(pensiones20,deflactor_pensiones_mes6,by = c("mes_6","año"))
+# 2022
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes1,by = c("mes_1","año"))
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes2,by = c("mes_2","año"))
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes3,by = c("mes_3","año"))
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes4,by = c("mes_4","año"))
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes5,by = c("mes_5","año"))
+pensiones22 <- left_join(pensiones22,deflactor_pensiones_mes6,by = c("mes_6","año"))
+
+# Lista bases pensiones
+bases_pensiones <- c("pensiones16","pensiones18","pensiones20","pensiones22")
+# Bucle
+for (base_pensiones in bases_pensiones) {
+  df <- get(base_pensiones)
+  # Filtrar
+  if (base_pensiones %in% c("pensiones16","pensiones18")) {
+    df <- df %>% filter(clave %in% c("P032","P033","P044","P045"))
+  } else {
+    df <- df %>% filter(clave %in% c("P032","P033","P104","P045"))
+  }
+  # Identificador de Persona
+  df <- df %>% mutate(idpersona = paste0(folioviv,foliohog,numren))
+  # Ingresos deflactado (1-6)
+  df <- df %>% mutate(ingresod1 = (ing_1/deflactor_mes1)*100,
+                      ingresod2 = (ing_2/deflactor_mes2)*100,
+                      ingresod3 = (ing_3/deflactor_mes3)*100,
+                      ingresod4 = (ing_4/deflactor_mes4)*100,
+                      ingresod5 = (ing_5/deflactor_mes5)*100,
+                      ingresod6 = (ing_6/deflactor_mes6)*100)
+  # Ingreso a través de las Pensiones
+  df <- df %>% mutate(ingreso_pensiones = ifelse(clave %in% c("P032","P033"), rowMeans(select(., ingresod1,
+                                                                                              ingresod2,ingresod3,ingresod4,ingresod5,ingresod6), na.rm=TRUE), NA_real_),
+                      ingreso_pensiones = ifelse(is.na(ingreso_pensiones), 0, ingreso_pensiones))
+  # Ingreso PAM
+  df <- df %>% mutate(ingreso_pam = ifelse(clave %in% c("P044","P045","P104"), rowMeans(select(., ingresod1,
+                                                                                               ingresod2,ingresod3,ingresod4,ingresod5,ingresod6), na.rm = TRUE), NA_real_),
+                      ingreso_pam = ifelse(is.na(ingreso_pam), 0, ingreso_pam))
+  # Transformar las bases
+  df <- df %>% 
+    group_by(idpersona) %>% 
+    summarise(suma_ingreso_pensiones = sum(ingreso_pensiones, na.rm=TRUE),
+              suma_ingreso_pam = sum(ingreso_pam, na.rm = TRUE))
+  assign(base_pensiones, df)
+}
+
+
+
+
+
 
 
 
